@@ -1,0 +1,33 @@
+Third-party notices for LayerClue
+
+This file describes the currently linked external Go modules and the Go
+standard library. It does not change the licence of those components.
+
+Go standard library and toolchain
+  Copyright 2009 The Go Authors.
+  Licence: BSD-3-Clause
+  Texts: third_party/licenses/go-LICENSE and go-PATENTS
+  The exact toolchain version is recorded in each release's BUILDINFO.json.
+
+bbolt (go.etcd.io/bbolt), v1.5.0
+  Copyright (c) 2013 Ben Johnson
+  Licence: MIT
+  Text: third_party/licenses/bbolt-LICENSE
+
+golang.org/x/sys, v0.45.0
+  Copyright 2009 The Go Authors.
+  Licence: BSD-3-Clause
+  Texts: third_party/licenses/xsys-LICENSE and xsys-PATENTS
+
+The full original texts, including their redistribution conditions and
+warranty disclaimers, are preserved without modification. Release packaging
+checks that the recorded versions and licence-file hashes match its inputs.
+The SBOM is generated from the modules linked into each binary; development
+and test dependencies are outside that binary SBOM's scope.
+
+CycloneDX JSON schemas (development validation only), specification 1.6
+  Licence: Apache-2.0
+  Original schema comments are retained under tools/schemas/. Their upstream
+  URLs and hashes are recorded in SOURCES.json. The applicable licence and
+  supplied notice are preserved under third_party/licenses/cyclonedx-*.
+  These schemas and the separately installed validator are not binary modules.

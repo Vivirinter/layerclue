@@ -1,0 +1,63 @@
+{
+  "schema": "layerclue.third-party/v1",
+  "components": [
+    {
+      "module": "go:stdlib",
+      "version": "toolchain",
+      "license": "BSD-3-Clause",
+      "files": [
+        {
+          "path": "third_party/licenses/go-LICENSE",
+          "original_name": "LICENSE",
+          "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
+        },
+        {
+          "path": "third_party/licenses/go-PATENTS",
+          "original_name": "PATENTS",
+          "sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc"
+        }
+      ]
+    },
+    {
+      "module": "go.etcd.io/bbolt",
+      "version": "v1.5.0",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "third_party/licenses/bbolt-LICENSE",
+          "original_name": "LICENSE",
+          "sha256": "c15d721c37e277a11584547de6d618541501f7aa10c4e32a945a4f9ff36cb0f6"
+        }
+      ]
+    },
+    {
+      "module": "golang.org/x/sys",
+      "version": "v0.45.0",
+      "license": "BSD-3-Clause",
+      "files": [
+        {
+          "path": "third_party/licenses/xsys-LICENSE",
+          "original_name": "LICENSE",
+          "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
+        },
+        {
+          "path": "third_party/licenses/xsys-PATENTS",
+          "original_name": "PATENTS",
+          "sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc"
+        }
+      ]
+    },
+    {
+      "module": "schema:cyclonedx",
+      "version": "1.6",
+      "license": "Apache-2.0",
+      "files": [
+        {
+          "path": "third_party/licenses/cyclonedx-LICENSE",
+          "original_name": "LICENSE",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ]
+    }
+  ]
+}
