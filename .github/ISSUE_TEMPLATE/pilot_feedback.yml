@@ -1,0 +1,32 @@
+name: Pilot feedback
+description: Results from the synthetic binary-bundle pilot.
+body:
+  - type: markdown
+    attributes:
+      value: "Start with the README quick start and docs/CASE.md#inventories-and-working-copies. Include only synthetic/sanitised information; keep private keys and incident data private."
+  - type: textarea
+    id: build
+    attributes:
+      label: Build and environment
+      description: Version, binary SHA-256, Linux/kernel and CPU architecture.
+    validations:
+      required: true
+  - type: textarea
+    id: results
+    attributes:
+      label: Observed pilot results
+      description: Installation, mount/upper origins, report replay, missing path, signed copy, existing-output refusal and tamper detection. Include exit codes; mark unexecuted steps not run.
+    validations:
+      required: true
+  - type: textarea
+    id: usability
+    attributes:
+      label: Usefulness and friction
+      description: Your role, a concrete task, time to a useful answer, unclear steps and the most important missing capability.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction, if needed
+      description: Synthetic commands/data and sanitised errors only.

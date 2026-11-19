@@ -1,0 +1,37 @@
+name: Bug report
+description: Report a reproducible LayerClue error using synthetic or sanitised data.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use a minimal synthetic case. Keep original incident captures, credentials
+        and private signing keys out of public reports. See SECURITY.md for the
+        current status of confidential vulnerability reporting.
+  - type: input
+    id: version
+    attributes:
+      label: LayerClue version
+      placeholder: Output of layerclue version
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment and input type
+      description: Linux/kernel, runtime/storage driver and offline capture/import mode.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Commands and a minimal synthetic fixture or generator steps.
+    validations:
+      required: true
+  - type: textarea
+    id: behaviour
+    attributes:
+      label: Expected and actual behaviour
+      description: Include sanitised errors or report excerpts, with incomplete/strict status.
+    validations:
+      required: true

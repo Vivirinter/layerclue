@@ -1,0 +1,224 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  merge_group:
+    types: [checks_requested]
+  workflow_dispatch:
+    inputs:
+      run_runtime_labs:
+        description: 'Run isolated kernel and disposable classic-overlay2 Docker labs; compatible preinstalled runtime required'
+        type: boolean
+        default: false
+      run_private_labs:
+        description: 'Run private containerd 1.7 and empty-chroot labs; preinstalled tools and user namespaces required'
+        type: boolean
+        default: false
+      run_runc_lab:
+        description: 'Also run the private manual non-TTY runc profile; preinstalled runc required'
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  GOENV: 'off'
+  GOWORK: 'off'
+  GOTOOLCHAIN: local
+  GOFLAGS: '-mod=readonly'
+  GOMAXPROCS: '2'
+  PYTHONDONTWRITEBYTECODE: '1'
+  LAYERCLUE_CI_PYTHON: /usr/bin/python3
+
+jobs:
+  workflow-audit:
+    name: Workflow security and syntax
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: '1.27.4'
+          cache: false
+      - name: actionlint, ShellCheck, zizmor and CI gate regressions
+        run: bash tools/ci/audit.sh
+
+  quality:
+    name: Formatting, vet and race tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: '1.27.4'
+          cache: false
+      - name: Formatting
+        run: |
+          unformatted=$(gofmt -l cmd internal tools)
+          if [[ -n "$unformatted" ]]; then
+            printf '%s\n' "$unformatted"
+            exit 1
+          fi
+      - run: go mod verify
+      - run: go vet ./...
+      - run: go test -race -p 2 -count=1 -timeout 90s ./...
+      - name: Module files must remain unchanged
+        run: git diff --exit-code -- go.mod go.sum
+
+  security:
+    name: Secrets, Go source and vulnerability checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: '1.27.4'
+          cache: false
+      - name: Local secret scan with redacted output
+        run: go run github.com/zricethezav/gitleaks/v8@v8.30.1 dir --config tools/gitleaks.toml --gitleaks-ignore-path /dev/null --ignore-gitleaks-allow --redact=100 --no-banner --no-color --timeout=120 .
+      - run: go run github.com/securego/gosec/v2/cmd/gosec@v2.30.0 ./...
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
+
+  fuzz:
+    name: Bounded parser fuzzing
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: '1.27.4'
+          cache: false
+      - run: go test ./internal/mounts -run '^$' -fuzz '^FuzzMountinfo$' -fuzztime 10s -parallel 2
+      - run: go test ./internal/evidence -run '^$' -fuzz '^FuzzStrictJSON$' -fuzztime 10s -parallel 2
+      - run: go test ./internal/oci -run '^$' -fuzz '^FuzzGzipLayer$' -fuzztime 10s -parallel 2
+      - run: go test ./internal/oci -run '^$' -fuzz '^FuzzTarChanges$' -fuzztime 10s -parallel 2
+      - run: go test ./internal/docker -run '^$' -fuzz '^FuzzInspect$' -fuzztime 10s -parallel 2
+      - run: go test ./internal/acquire -run '^$' -fuzz '^FuzzDecodePlan$' -fuzztime 10s -parallel 2
+      - run: go test ./internal/distribution -run '^$' -fuzz '^FuzzValidReleaseVersion$' -fuzztime 10s -parallel 2
+
+  package:
+    name: Source-bound package and installation
+    needs: [workflow-audit, quality, security, fuzz]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: '1.27.4'
+          cache: false
+      - name: Synthetic smoke tests, test-key signatures, offline SBOM and binary installation
+        run: bash tools/ci/package.sh --require-clean
+
+  runtime-labs:
+    name: Optional kernel and Docker labs
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.run_runtime_labs &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    needs: [package]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: '1.27.4'
+          cache: false
+      - name: Check existing lab prerequisites
+        run: bash tools/ci/runtime-preflight.sh docker
+      - name: Disposable integration labs
+        env:
+          LAYERCLUE_KERNEL_TEST: '1'
+          LAYERCLUE_DOCKER_TEST: '1'
+        run: go test -v -count=1 -timeout 180s ./internal/lab -run '^Test(KernelOverlay|SnapshotAcquisition|DockerOverlay2)$'
+
+  private-labs:
+    name: Optional private containerd labs
+    if: >-
+      github.event_name == 'workflow_dispatch' && (inputs.run_private_labs || inputs.run_runc_lab) &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    needs: [package]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: '1.27.4'
+          cache: false
+      - name: Check existing lab prerequisites
+        env:
+          REQUIRE_RUNC: ${{ inputs.run_runc_lab }}
+        run: bash tools/ci/runtime-preflight.sh containerd
+      - name: Private labs without host policy changes
+        env:
+          LAYERCLUE_CONTAINERD_TEST: '1'
+          LAYERCLUE_INSTALL_TEST: '1'
+          LAYERCLUE_INSTALL_CHROOT_TEST: '1'
+        run: go test -v -count=1 -timeout 240s ./internal/lab -run '^Test(PrivateContainerd|BinaryInstallation)$'
+      - name: Private manual runc profile
+        if: inputs.run_runc_lab
+        env:
+          LAYERCLUE_CONTAINERD_TEST: '1'
+          LAYERCLUE_RUNC_TEST: '1'
+        run: go test -v -count=1 -timeout 180s ./internal/lab -run '^TestPrivateContainerd$'
+
+  ci-success:
+    name: ci-success
+    if: always()
+    needs: [workflow-audit, quality, security, fuzz, package, runtime-labs, private-labs]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require successful checks, including any requested labs
+        env:
+          NEEDS_RESULTS: ${{ toJSON(needs) }}
+          REQUIRE_RUNTIME_LAB: ${{ github.event_name == 'workflow_dispatch' && inputs.run_runtime_labs }}
+          REQUIRE_PRIVATE_LAB: ${{ github.event_name == 'workflow_dispatch' && (inputs.run_private_labs || inputs.run_runc_lab) }}
+        run: /usr/bin/python3 tools/ci/check_results.py
