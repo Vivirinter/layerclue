@@ -52,7 +52,13 @@ func TestV3ReportsRemainVerifiableWithoutInventingStates(t *testing.T) {
 	if problems := Report(r); len(problems) != 0 {
 		t.Fatal(problems)
 	}
-
+	r.Visible.CapturedMetadata = &model.FileMetadata{Mode: "-rw-------"}
+	if err := r.Seal(); err != nil {
+		t.Fatal(err)
+	}
+	if problems := Report(r); len(problems) == 0 {
+		t.Fatal("accepted v4 metadata in a v3 envelope")
+	}
 }
 
 func TestMountAbsenceNeedsCompleteMapping(t *testing.T) {

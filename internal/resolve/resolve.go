@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"unicode/utf8"
 
 	"github.com/Vivirinter/layerclue/internal/evidence"
@@ -188,12 +189,20 @@ func (r *Resolver) Resolve(p string) (*Outcome, error) {
 	}
 
 	verdict, explanation := r.decide(clean, visible, image)
+	visibleLocation, err := r.location(visible)
+	if err != nil {
+		return nil, err
+	}
+	imageLocation, err := r.location(image)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Outcome{
 		Verdict:      verdict,
 		Explanation:  explanation,
-		Visible:      r.location(visible),
-		Image:        r.location(image),
+		Visible:      visibleLocation,
+		Image:        imageLocation,
 		VisibleState: pathState(visible),
 		LowerState:   pathState(image),
 		Trace:        r.trace,
@@ -548,9 +557,9 @@ func (r *Resolver) claims(vis, img *located) []model.Claim {
 	return out
 }
 
-func (r *Resolver) location(l *located) *model.Location {
+func (r *Resolver) location(l *located) (*model.Location, error) {
 	if l == nil || l.Missing || l.Absent || l.Deleted {
-		return nil
+		return nil, nil
 	}
 	loc := &model.Location{
 		CapturedPath: r.relPath(l.HostPath),
@@ -563,17 +572,28 @@ func (r *Resolver) location(l *located) *model.Location {
 		LinkTarget:   l.LinkTarget,
 		MetaCopy:     l.MetaCopy,
 	}
+	if l.Info != nil {
+		st, ok := l.Info.Sys().(*syscall.Stat_t)
+		if !ok {
+			return nil, errors.New("Linux inode metadata unavailable")
+		}
+		mtime, err := evidence.NanosecondMtime(l.Info)
+		if err != nil {
+			return nil, err
+		}
+		loc.CapturedMetadata = &model.FileMetadata{Mode: l.Mode.String(), ModeBits: uint32(l.Mode), UID: st.Uid, GID: st.Gid, MtimeNS: mtime}
+	}
 	if l.Provider == ProviderMount {
 		loc.MountPoint = l.Mount.Point
 		loc.MountSource = l.Mount.Source
-		return loc
+		return loc, nil
 	}
 	loc.LayerIndex = l.Layer
 	loc.LayerTotal = r.opts.Stack.Len()
 	if l.Layer >= 0 && l.Layer < r.opts.Stack.Len() {
 		loc.LayerDigest = r.opts.Stack.Layers[l.Layer].Digest
 	}
-	return loc
+	return loc, nil
 }
 
 func pathState(l *located) model.PathState {

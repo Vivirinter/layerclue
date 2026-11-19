@@ -32,6 +32,7 @@ func Report(rep *model.Report) []string {
 	}
 	problems = append(problems, checkImageProvenance(rep)...)
 	problems = append(problems, checkPathStates(rep)...)
+	problems = append(problems, checkLocationMetadata(rep)...)
 	if !model.ValidVerdict(rep.Verdict) {
 		problems = append(problems, "report has an unknown verdict")
 	}

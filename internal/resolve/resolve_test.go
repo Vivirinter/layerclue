@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/Vivirinter/layerclue/internal/casefile"
 	"github.com/Vivirinter/layerclue/internal/model"
@@ -286,6 +287,13 @@ func TestClaimsAlwaysReferenceFacts(t *testing.T) {
 func TestReportIsDeterministic(t *testing.T) {
 	build := func() []byte {
 		f := newFixture(t)
+		// Equal cases include equal metadata, not just equal file bytes.
+		fixed := time.Unix(1700000000, 123456789)
+		for _, file := range []string{filepath.Join(f.bind, "helper"), filepath.Join(f.base, "usr/bin/helper")} {
+			if err := os.Chtimes(file, fixed, fixed); err != nil {
+				t.Fatal(err)
+			}
+		}
 		out := f.explain(t, "/usr/bin/helper")
 		rep := &model.Report{
 			Schema:      model.SchemaReport,

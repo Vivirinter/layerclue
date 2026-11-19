@@ -108,6 +108,9 @@ func BuildReport(ctx context.Context, c *casefile.Case, target string, options O
 
 	attachImageProvenance(ctx, c, identity, stack, overlayMount, rep)
 	attachDockerIdentity(c, identity, overlayMount, rep)
+	if err := addSourceMetadata(ctx, c, rep); err != nil {
+		return nil, err
+	}
 	rep.Incomplete = rep.Incomplete || len(rep.Missing) > 0
 	return rep, nil
 }

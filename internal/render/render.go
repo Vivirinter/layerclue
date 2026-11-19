@@ -7,6 +7,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Vivirinter/layerclue/internal/evidence"
 	"github.com/Vivirinter/layerclue/internal/model"
@@ -62,6 +63,25 @@ func Terminal(w io.Writer, rep *model.Report, showTrace bool) error {
 		}
 	}
 	fmt.Fprintf(&b, "\n  %s\n", Safe(rep.Explanation))
+	for _, view := range []struct {
+		label    string
+		state    model.PathState
+		location *model.Location
+	}{{"visible", rep.VisibleState, rep.Visible}, {"lower", rep.LowerState, rep.Image}} {
+		if view.location == nil || view.state == model.PathUnknown {
+			continue
+		}
+		if metadata := view.location.CapturedMetadata; metadata != nil {
+			fmt.Fprintf(&b, "\n  %s capture metadata: %s\n", view.label, describeMetadata(*metadata))
+			if original := view.location.OriginalMetadata; original != nil {
+				fmt.Fprintf(&b, "  %s recorded source:  %s\n", view.label, describeMetadata(original.Metadata))
+				fmt.Fprintf(&b, "  source journal: %s (%s; %s)\n", Safe(original.Artifact), Safe(original.Binding), Safe(original.JournalSHA256))
+				fmt.Fprintf(&b, "  source scope: %s\n", Safe(original.Scope))
+			} else {
+				fmt.Fprintf(&b, "  %s recorded source:  unavailable (no matching bound journal record)\n", view.label)
+			}
+		}
+	}
 
 	if len(rep.Missing) > 0 {
 		fmt.Fprintf(&b, "\n  missing evidence:\n")
@@ -140,6 +160,10 @@ func describeView(l *model.Location, state model.PathState) string {
 		// A nil v3 location never proves absence.
 		return describeOr(l, "unknown (state not recorded)")
 	}
+}
+
+func describeMetadata(metadata model.FileMetadata) string {
+	return fmt.Sprintf("mode=%s uid=%d gid=%d mtime=%s", Safe(metadata.Mode), metadata.UID, metadata.GID, time.Unix(0, metadata.MtimeNS).UTC().Format(time.RFC3339Nano))
 }
 
 func strengthOf(rep *model.Report) model.Strength {

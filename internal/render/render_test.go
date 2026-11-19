@@ -141,3 +141,19 @@ func TestTerminalDoesNotConflateUnknownWithAbsence(t *testing.T) {
 		}
 	}
 }
+
+func TestTerminalSeparatesCaptureAndRecordedMetadata(t *testing.T) {
+	rep := sampleReport()
+	rep.VisibleState = model.PathPresent
+	rep.Visible.CapturedMetadata = &model.FileMetadata{Mode: "-rw-------", UID: 1000, GID: 1000, MtimeNS: 1700000000123456789}
+	rep.Visible.OriginalMetadata = &model.OriginalMetadata{Metadata: model.FileMetadata{Mode: "-rwxr-xr-x", UID: 0, GID: 0, MtimeNS: 1600000000123456789}, Artifact: "layerclue-acquisition.json", Scope: model.RecordedMetadataScope, Binding: "file_sha256"}
+	var buf bytes.Buffer
+	if err := Terminal(&buf, rep, false); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"visible capture metadata: mode=-rw------- uid=1000", "visible recorded source:  mode=-rwxr-xr-x uid=0", model.RecordedMetadataScope} {
+		if !strings.Contains(buf.String(), want) {
+			t.Fatalf("missing metadata distinction %q: %s", want, buf.String())
+		}
+	}
+}

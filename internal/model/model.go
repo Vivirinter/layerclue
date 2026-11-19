@@ -144,21 +144,50 @@ type Step struct {
 
 // Location describes an object as seen through one particular view.
 type Location struct {
-	CapturedPath     string `json:"captured_path,omitempty"`
-	Provider         string `json:"provider"`
-	Logical          string `json:"logical"`
-	LayerIndex       int    `json:"layer_index,omitempty"`
-	LayerTotal       int    `json:"layer_total,omitempty"`
-	LayerDigest      string `json:"layer_digest,omitempty"`
-	LayerAssociation string `json:"layer_association,omitempty"`
-	MountPoint       string `json:"mount_point,omitempty"`
-	MountSource      string `json:"mount_source,omitempty"`
-	Type             string `json:"type,omitempty"`
-	Mode             string `json:"mode,omitempty"`
-	Size             int64  `json:"size,omitempty"`
-	SHA256           string `json:"sha256,omitempty"`
-	LinkTarget       string `json:"link_target,omitempty"`
-	MetaCopy         bool   `json:"metacopy,omitempty"`
+	CapturedPath     string            `json:"captured_path,omitempty"`
+	Provider         string            `json:"provider"`
+	Logical          string            `json:"logical"`
+	LayerIndex       int               `json:"layer_index,omitempty"`
+	LayerTotal       int               `json:"layer_total,omitempty"`
+	LayerDigest      string            `json:"layer_digest,omitempty"`
+	LayerAssociation string            `json:"layer_association,omitempty"`
+	MountPoint       string            `json:"mount_point,omitempty"`
+	MountSource      string            `json:"mount_source,omitempty"`
+	Type             string            `json:"type,omitempty"`
+	Mode             string            `json:"mode,omitempty"`
+	Size             int64             `json:"size,omitempty"`
+	SHA256           string            `json:"sha256,omitempty"`
+	LinkTarget       string            `json:"link_target,omitempty"`
+	MetaCopy         bool              `json:"metacopy,omitempty"`
+	CapturedMetadata *FileMetadata     `json:"captured_metadata,omitempty"`
+	OriginalMetadata *OriginalMetadata `json:"original_metadata,omitempty"`
+}
+
+// FileMetadata records readable inode metadata, not executable capabilities or
+// proof of execution. Mode uses the same display notation as Location.Mode.
+// ModeBits is Go FileMode, not native Linux st_mode or a chmod argument.
+type FileMetadata struct {
+	Mode     string `json:"mode"`
+	ModeBits uint32 `json:"mode_bits"`
+	UID      uint32 `json:"uid"`
+	GID      uint32 `json:"gid"`
+	MtimeNS  int64  `json:"mtime_ns"`
+}
+
+const RecordedMetadataScope = "acquisition record bound to captured object; source authenticity and acquisition atomicity are not verified"
+
+// OriginalMetadata is a statement in a captured journal. Its checksum binds
+// the exact journal read, not the identity or truthfulness of its author.
+type OriginalMetadata struct {
+	Metadata      FileMetadata `json:"metadata"`
+	Artifact      string       `json:"artifact"`
+	JournalSchema string       `json:"journal_schema"`
+	JournalSHA256 string       `json:"journal_sha256"`
+	SourcePath    string       `json:"source_path"`
+	Binding       string       `json:"binding"`
+	ObjectSHA256  string       `json:"object_sha256"`
+	Scope         string       `json:"scope"`
+	Evidence      string       `json:"evidence"`
 }
 
 type AnalysisConfig struct {
