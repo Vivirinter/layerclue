@@ -33,16 +33,16 @@ func Compare(ctx context.Context, c *casefile.Case, target, contentRoot, manifes
 	}
 	out := Comparison{Schema: "layerclue.comparison/v1", ManifestDigest: manifest, Scope: "selected regular-file type and bytes in captured namespace versus explicitly selected OCI image; ownership, permissions, xattrs, execution history, original launch image and publisher authenticity are not verified", Image: image, Captured: captured, Status: "inconclusive"}
 	if captured.Complete() {
-		if image.Status == "present" && image.Kind == "file" && captured.Visible != nil && captured.Visible.Type == "file" && captured.Visible.SHA256 != "" {
+		if image.Status == "present" && image.Kind == "file" && captured.VisibleState == model.PathPresent && captured.Visible != nil && captured.Visible.Type == "file" && captured.Visible.SHA256 != "" {
 			out.Status = "different_bytes"
 			if captured.Visible.SHA256 == image.SHA256 {
 				out.Status = "matching_bytes"
 			}
-		} else if image.Status == "absent" && captured.Visible != nil {
+		} else if image.Status == "absent" && captured.VisibleState == model.PathPresent {
 			out.Status = "absent_in_image"
-		} else if image.Status == "present" && captured.Visible == nil {
+		} else if image.Status == "present" && captured.VisibleState.KnownAbsent() {
 			out.Status = "absent_in_capture"
-		} else if image.Status == "absent" && captured.Visible == nil {
+		} else if image.Status == "absent" && captured.VisibleState.KnownAbsent() {
 			out.Status = "both_absent"
 		} else {
 			out.Status = "not_regular_file"

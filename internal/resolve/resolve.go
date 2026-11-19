@@ -112,15 +112,17 @@ func New(o Options) *Resolver {
 
 // Outcome is everything the resolver learned about one path.
 type Outcome struct {
-	Verdict     model.Verdict
-	Explanation string
-	Visible     *model.Location
-	Image       *model.Location
-	Trace       []model.Step
-	Facts       []model.Fact
-	Claims      []model.Claim
-	Missing     []string
-	Incomplete  bool
+	Verdict      model.Verdict
+	Explanation  string
+	Visible      *model.Location
+	Image        *model.Location
+	VisibleState model.PathState
+	LowerState   model.PathState
+	Trace        []model.Step
+	Facts        []model.Fact
+	Claims       []model.Claim
+	Missing      []string
+	Incomplete   bool
 }
 
 type located struct {
@@ -138,6 +140,8 @@ type located struct {
 	DeletedBy  overlay.Entry
 	Opaque     bool
 	Missing    bool
+	Absent     bool
+	Incomplete bool
 	Evidence   []string
 	sha        string
 	Info       os.FileInfo
@@ -186,15 +190,17 @@ func (r *Resolver) Resolve(p string) (*Outcome, error) {
 	verdict, explanation := r.decide(clean, visible, image)
 
 	return &Outcome{
-		Verdict:     verdict,
-		Explanation: explanation,
-		Visible:     r.location(visible),
-		Image:       r.location(image),
-		Trace:       r.trace,
-		Facts:       r.facts,
-		Claims:      r.claims(visible, image),
-		Missing:     r.missing,
-		Incomplete:  r.incomplete,
+		Verdict:      verdict,
+		Explanation:  explanation,
+		Visible:      r.location(visible),
+		Image:        r.location(image),
+		VisibleState: pathState(visible),
+		LowerState:   pathState(image),
+		Trace:        r.trace,
+		Facts:        r.facts,
+		Claims:       r.claims(visible, image),
+		Missing:      r.missing,
+		Incomplete:   r.incomplete,
 	}, nil
 }
 
@@ -205,6 +211,16 @@ func (r *Resolver) walk(p string) (*located, error) {
 	pending := strings.Split(p, "/")
 	var components []string
 	var last *located
+	var dependencies []string
+	uncertain := false
+	finish := func(l *located) *located {
+		if l == nil {
+			return &located{Logical: p, Missing: true}
+		}
+		l.Incomplete = l.Incomplete || uncertain
+		l.Evidence = append([]string(nil), dependencies...)
+		return l
+	}
 	steps := 0
 	for len(pending) > 0 {
 		if err := r.opts.Context.Err(); err != nil {
@@ -232,10 +248,12 @@ func (r *Resolver) walk(p string) (*located, error) {
 			return nil, err
 		}
 		if loc == nil {
-			return &located{Logical: next, Missing: true}, nil
+			return finish(nil), nil
 		}
-		if loc.Missing || loc.Deleted {
-			return loc, nil
+		dependencies = append(dependencies, loc.Evidence...)
+		uncertain = uncertain || loc.Incomplete
+		if loc.Missing || loc.Absent || loc.Deleted {
+			return finish(loc), nil
 		}
 		if loc.Kind == overlay.KindSymlink {
 			r.hops++
@@ -254,20 +272,27 @@ func (r *Resolver) walk(p string) (*located, error) {
 			continue
 		}
 		if len(pending) > 0 && loc.Kind != overlay.KindDir {
-			return &located{Logical: next, Missing: true}, nil
+			id := r.fact("non_directory_parent", model.Source{Artifact: "file", Path: r.relPath(loc.HostPath)}, model.Observed, map[string]any{"path": next, "kind": loc.Kind.String()})
+			dependencies = append(dependencies, id)
+			r.step(model.StepAbsent, next, "a non-directory prevents further traversal", id)
+			return finish(&located{Logical: next, Absent: true}), nil
 		}
 		components = append(components, part)
 		last = loc
 	}
 	if last != nil {
-		return last, nil
+		return finish(last), nil
 	}
-	return r.lookupOne("/" + strings.Join(components, "/"))
+	l, err := r.lookupOne("/" + strings.Join(components, "/"))
+	if l != nil {
+		dependencies = append(dependencies, l.Evidence...)
+	}
+	return finish(l), err
 }
 
 func (r *Resolver) unsupported(err error) *Outcome {
 	r.step(model.StepUnsupported, "", err.Error())
-	return &Outcome{Verdict: model.VerdictUnsupportedFeature, Explanation: err.Error(), Trace: r.trace, Facts: r.facts, Incomplete: true, Missing: []string{err.Error()}}
+	return &Outcome{Verdict: model.VerdictUnsupportedFeature, Explanation: err.Error(), VisibleState: model.PathUnknown, LowerState: model.PathUnknown, Trace: r.trace, Facts: r.facts, Incomplete: true, Missing: []string{err.Error()}}
 }
 
 func (r *Resolver) lookupOne(logical string) (*located, error) {
@@ -310,13 +335,14 @@ func (r *Resolver) lookupOverlay(logical, rel string, m mounts.Entry) (*located,
 		}
 		r.step(kind, logical, "blocking entry in layer "+layerLabel(e.Layer, r.opts.Stack), ev, fev)
 		return &located{
-			Logical:   logical,
-			Provider:  ProviderOverlay,
-			Deleted:   true,
-			DeletedBy: e,
-			Layer:     e.Layer,
-			Opaque:    e.Opaque,
-			Evidence:  []string{ev, fev},
+			Logical:    logical,
+			Provider:   ProviderOverlay,
+			Deleted:    true,
+			DeletedBy:  e,
+			Layer:      e.Layer,
+			Opaque:     e.Opaque,
+			Evidence:   []string{ev, fev},
+			Incomplete: res.Incomplete,
 		}, nil
 
 	case overlay.StateFound:
@@ -342,11 +368,17 @@ func (r *Resolver) lookupOverlay(logical, rel string, m mounts.Entry) (*located,
 			MetaCopy:   e.MetaCopy,
 			Evidence:   []string{ev, fev},
 			Info:       e.Info,
+			Incomplete: res.Incomplete,
 		}, nil
 
 	default:
 		r.step(model.StepOverlayMiss, logical, "no layer provides the path", ev)
-		return nil, nil
+		layers := make([]string, 0, len(r.opts.Stack.Layers))
+		for _, layer := range r.opts.Stack.Layers {
+			layers = append(layers, r.relPath(layer.Root))
+		}
+		absent := r.fact("overlay_path_absent", r.mountSource(m), model.Observed, map[string]any{"path": logical, "layers": layers, "attribute_namespace": r.opts.Stack.AttrPrefix})
+		return &located{Logical: logical, Absent: true, Incomplete: res.Incomplete, Evidence: []string{ev, absent}}, nil
 	}
 }
 
@@ -359,22 +391,37 @@ func (r *Resolver) lookupMount(logical, rel string, m mounts.Entry) (*located, e
 		r.note("no captured source mapping for mount " + strconv.Itoa(m.ID) + " at " + m.Point)
 		return &located{Logical: logical, Provider: ProviderMount, Mount: m, Missing: true, Evidence: []string{ev}}, nil
 	}
+	rootInfo, err := evidence.Lstat(r.opts.CaseRoot, source.Root)
+	if errors.Is(err, fs.ErrNotExist) {
+		r.incomplete = true
+		r.note("captured root is missing for mount " + strconv.Itoa(m.ID))
+		return &located{Logical: logical, Missing: true, Evidence: []string{ev}}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !rootInfo.IsDir() && !rootInfo.Mode().IsRegular() {
+		return nil, errors.New("captured mount root must be a physical directory or regular file")
+	}
+	mapping := r.fact("captured_mount_mapping", model.Source{Artifact: "case.json"}, model.Observed, map[string]any{"mount_id": m.ID, "artifact": source.Artifact, "complete_assertion": source.Complete})
 	hostPath := filepath.Join(source.Root, filepath.FromSlash(strings.TrimPrefix(rel, "/")))
 	fi, err := evidence.Lstat(r.opts.CaseRoot, hostPath)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			r.incomplete = true
 			if source.Complete {
-				r.note("path is absent from captured mount " + strconv.Itoa(m.ID))
+				absent := r.fact("mount_path_absent", model.Source{Artifact: "mount_source", Path: r.relPath(hostPath)}, model.Observed, map[string]any{"mount_id": m.ID, "path": logical})
+				r.step(model.StepAbsent, logical, "absent from explicitly complete captured mount", ev, mapping, absent)
+				return &located{Logical: logical, Absent: true, Evidence: []string{ev, mapping, absent}}, nil
 			} else {
+				r.incomplete = true
 				r.note("mount capture is incomplete: " + strconv.Itoa(m.ID))
 			}
-			return &located{Logical: logical, Provider: ProviderMount, Mount: m, Missing: true, Evidence: []string{ev}}, nil
+			return &located{Logical: logical, Provider: ProviderMount, Mount: m, Missing: true, Evidence: []string{ev, mapping}}, nil
 		}
 		return nil, err
 	}
 	fev := r.fact("mount_file", model.Source{Artifact: "mount_source", Path: r.relPath(hostPath)}, model.Observed, map[string]any{"kind": kindOf(fi.Mode()).String(), "mode": fi.Mode().String(), "size": fi.Size(), "mount_id": m.ID, "mapping": source.Artifact})
-	loc := &located{Logical: logical, Provider: ProviderMount, Kind: kindOf(fi.Mode()), Mode: fi.Mode(), Size: fi.Size(), HostPath: hostPath, Layer: -1, Mount: m, Evidence: []string{ev, fev}, Info: fi}
+	loc := &located{Logical: logical, Provider: ProviderMount, Kind: kindOf(fi.Mode()), Mode: fi.Mode(), Size: fi.Size(), HostPath: hostPath, Layer: -1, Mount: m, Evidence: []string{ev, mapping, fev}, Info: fi}
 	if loc.Kind == overlay.KindSymlink {
 		loc.LinkTarget, err = evidence.Readlink(r.opts.CaseRoot, hostPath)
 		if err != nil {
@@ -402,7 +449,8 @@ func (r *Resolver) imageStack() overlay.Stack {
 func (r *Resolver) imageLookup(p string) (*located, error) {
 	image := r.imageStack()
 	if image.Len() == 0 {
-		return nil, nil
+		id := r.fact("empty_lower_stack", model.Source{Artifact: r.opts.MountinfoArtifact}, model.Observed, map[string]any{"path": p})
+		return &located{Logical: p, Absent: true, Evidence: []string{id}}, nil
 	}
 	saved := r.opts
 	savedHops := r.hops
@@ -427,17 +475,20 @@ func (r *Resolver) decide(p string, vis, img *located) (model.Verdict, string) {
 	if vis == nil || vis.Missing {
 		return model.VerdictUnknownInsufficient, "The captured evidence does not determine what is visible at " + p + "."
 	}
+	if vis.Absent {
+		return model.VerdictAbsent, "The path is absent from the captured visible view; this does not establish whether it existed previously."
+	}
 	if vis.Deleted {
 		if vis.Opaque {
 			return model.VerdictDeletedByOpaqueParent, "A captured opaque directory hides the lower entry at " + p + "."
 		}
-		return model.VerdictDeletedByWhiteout, "A captured whiteout removes " + p + "."
+		return model.VerdictDeletedByWhiteout, "A captured whiteout blocks " + p + "; prior existence and deletion time are not established."
 	}
 	if vis.Provider == ProviderMount {
 		return model.VerdictShadowedByMount, "Mount " + vis.Mount.Point + " provides this path through an explicit captured-source mapping; it overlays the underlying container filesystem."
 	}
 	if vis.Layer >= 0 && vis.Layer < len(r.opts.Stack.Layers) && r.opts.Stack.Layers[vis.Layer].Upper {
-		if img == nil || img.Missing || img.Deleted {
+		if img == nil || img.Missing || img.Absent || img.Deleted {
 			return model.VerdictFromUpperAdded, "The writable layer provides this path; no entry was found in the captured lower view."
 		}
 		if vis.Kind != overlay.KindFile || img.Kind != overlay.KindFile {
@@ -453,8 +504,16 @@ func (r *Resolver) decide(p string, vis, img *located) (model.Verdict, string) {
 
 func (r *Resolver) claims(vis, img *located) []model.Claim {
 	var out []model.Claim
+	for _, view := range []struct {
+		name     string
+		location *located
+	}{{"visible", vis}, {"lower", img}} {
+		if state := pathState(view.location); state.KnownAbsent() && len(view.location.Evidence) > 0 {
+			out = append(out, model.Claim{Kind: view.name + "_absence", Answer: string(state), DependsOn: view.location.Evidence, Strength: model.Derived})
+		}
+	}
 
-	if vis != nil && !vis.Missing && !vis.Deleted && !r.incomplete && len(vis.Evidence) > 0 {
+	if pathState(vis) == model.PathPresent && !r.incomplete && len(vis.Evidence) > 0 {
 		out = append(out, model.Claim{
 			Kind:      "visible_provider",
 			Answer:    providerAnswer(vis),
@@ -462,7 +521,7 @@ func (r *Resolver) claims(vis, img *located) []model.Claim {
 			Strength:  model.Derived,
 		})
 	}
-	if img != nil && !img.Missing && !img.Deleted && !r.incomplete && len(img.Evidence) > 0 {
+	if pathState(img) == model.PathPresent && !r.incomplete && len(img.Evidence) > 0 {
 		out = append(out, model.Claim{
 			Kind:      "lower_provider",
 			Answer:    providerAnswer(img),
@@ -490,7 +549,7 @@ func (r *Resolver) claims(vis, img *located) []model.Claim {
 }
 
 func (r *Resolver) location(l *located) *model.Location {
-	if l == nil || l.Missing || l.Deleted {
+	if l == nil || l.Missing || l.Absent || l.Deleted {
 		return nil
 	}
 	loc := &model.Location{
@@ -515,6 +574,22 @@ func (r *Resolver) location(l *located) *model.Location {
 		loc.LayerDigest = r.opts.Stack.Layers[l.Layer].Digest
 	}
 	return loc
+}
+
+func pathState(l *located) model.PathState {
+	if l == nil || l.Missing || l.Incomplete {
+		return model.PathUnknown
+	}
+	if l.Deleted {
+		if l.Opaque {
+			return model.PathOpaque
+		}
+		return model.PathWhiteout
+	}
+	if l.Absent {
+		return model.PathAbsent
+	}
+	return model.PathPresent
 }
 
 func (r *Resolver) hash(l *located) (string, error) {
@@ -593,6 +668,8 @@ func (r *Resolver) layerFact(e overlay.Entry) string {
 		"layer":               layerLabel(e.Layer, r.opts.Stack),
 		"kind":                e.Kind.String(),
 		"attribute_namespace": r.opts.Stack.AttrPrefix,
+		"whiteout":            e.Whiteout,
+		"opaque":              e.Opaque,
 	})
 }
 

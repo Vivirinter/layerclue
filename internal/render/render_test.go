@@ -117,3 +117,27 @@ func TestTerminalEscapesArtifactControls(t *testing.T) {
 		t.Fatalf("unescaped terminal controls: %q", buf.String())
 	}
 }
+
+func TestTerminalDoesNotConflateUnknownWithAbsence(t *testing.T) {
+	for _, tc := range []struct {
+		state model.PathState
+		want  string
+	}{
+		{model.PathUnknown, "unknown (insufficient evidence)"},
+		{model.PathAbsent, "absent in captured view"},
+		{model.PathWhiteout, "blocked by a captured whiteout"},
+		{model.PathOpaque, "hidden by a captured opaque directory"},
+		{"", "unknown (state not recorded)"},
+	} {
+		rep := sampleReport()
+		rep.Visible, rep.Image = nil, nil
+		rep.VisibleState, rep.LowerState = tc.state, tc.state
+		var buf bytes.Buffer
+		if err := Terminal(&buf, rep, false); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(buf.String(), tc.want) || strings.Contains(buf.String(), "nothing") || strings.Contains(buf.String(), "no entry") {
+			t.Fatalf("misleading state output: %s", buf.String())
+		}
+	}
+}

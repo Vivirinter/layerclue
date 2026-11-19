@@ -13,7 +13,31 @@ import (
 )
 
 // SchemaReport is the wire schema of a report document.
-const SchemaReport = "layerclue.report/v3"
+const SchemaReport = "layerclue.report/v4"
+
+// SchemaReportV3 remains readable for structure/checksum verification. Its
+// missing locations do not distinguish absence from unavailable evidence.
+const SchemaReportV3 = "layerclue.report/v3"
+
+// PathState describes one captured view. Absence never establishes prior
+// existence, and a missing capture must not be reported as an absent path.
+type PathState string
+
+const (
+	PathPresent  PathState = "present"
+	PathAbsent   PathState = "absent"
+	PathWhiteout PathState = "deleted_by_whiteout"
+	PathOpaque   PathState = "hidden_by_opaque_parent"
+	PathUnknown  PathState = "unknown"
+)
+
+func (s PathState) KnownAbsent() bool {
+	return s == PathAbsent || s == PathWhiteout || s == PathOpaque
+}
+
+func (s PathState) Valid() bool {
+	return s == PathPresent || s.KnownAbsent() || s == PathUnknown
+}
 
 // Strength states how well a claim is supported by the underlying artifacts.
 type Strength string
@@ -57,6 +81,9 @@ const (
 	VerdictShadowedByMount Verdict = "shadowed_by_mount"
 	// VerdictSymlinkRedirect means the path is a symlink and was followed.
 	VerdictSymlinkRedirect Verdict = "symlink_redirect"
+	// VerdictAbsent states absence in the captured visible view, not deletion
+	// history or absence on an uncaptured/live system.
+	VerdictAbsent Verdict = "absent_in_capture"
 	// VerdictUnknownInsufficient means the captured evidence does not answer
 	// the question.
 	VerdictUnknownInsufficient Verdict = "unknown_insufficient_evidence"
@@ -103,6 +130,7 @@ const (
 	StepSymlink     StepKind = "symlink"
 	StepMissing     StepKind = "missing_evidence"
 	StepUnsupported StepKind = "unsupported_feature"
+	StepAbsent      StepKind = "path_absent"
 )
 
 // Step is one entry of the resolution trace, in execution order.
@@ -180,6 +208,8 @@ type Report struct {
 	Explanation     string           `json:"explanation"`
 	Visible         *Location        `json:"visible,omitempty"`
 	Image           *Location        `json:"lower,omitempty"`
+	VisibleState    PathState        `json:"visible_state,omitempty"`
+	LowerState      PathState        `json:"lower_state,omitempty"`
 	Trace           []Step           `json:"trace"`
 	Facts           []Fact           `json:"facts"`
 	Claims          []Claim          `json:"claims"`
@@ -224,6 +254,9 @@ func (r *Report) Complete() bool {
 	if r.Incomplete || len(r.Missing) > 0 || r.HasAssumed() || len(r.Claims) == 0 {
 		return false
 	}
+	if r.Schema == SchemaReport && (!r.VisibleState.Valid() || !r.LowerState.Valid() || r.VisibleState == PathUnknown || r.LowerState == PathUnknown) {
+		return false
+	}
 	for _, claim := range r.Claims {
 		if claim.Strength != Observed && claim.Strength != Derived {
 			return false
@@ -234,7 +267,7 @@ func (r *Report) Complete() bool {
 
 func ValidVerdict(v Verdict) bool {
 	switch v {
-	case VerdictFromImageLayer, VerdictFromUpper, VerdictFromUpperAdded, VerdictFromUpperModified, VerdictFromUpperCopyUpSame, VerdictFromUpperMetadataOnly, VerdictDeletedByWhiteout, VerdictDeletedByOpaqueParent, VerdictShadowedByMount, VerdictSymlinkRedirect, VerdictUnknownInsufficient, VerdictUnsupportedFeature:
+	case VerdictFromImageLayer, VerdictFromUpper, VerdictFromUpperAdded, VerdictFromUpperModified, VerdictFromUpperCopyUpSame, VerdictFromUpperMetadataOnly, VerdictDeletedByWhiteout, VerdictDeletedByOpaqueParent, VerdictShadowedByMount, VerdictSymlinkRedirect, VerdictAbsent, VerdictUnknownInsufficient, VerdictUnsupportedFeature:
 		return true
 	}
 	return false

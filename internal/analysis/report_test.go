@@ -3,6 +3,7 @@ package analysis_test
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -94,5 +95,38 @@ func TestReportRejectsMissingDependencies(t *testing.T) {
 		if report, err := analysis.BuildReport(tc.ctx, tc.capture, "/opt/tool", tc.options); err == nil || report != nil {
 			t.Fatalf("invalid analysis dependencies accepted: report=%+v err=%v", report, err)
 		}
+	}
+}
+
+func TestCompareEstablishedAbsence(t *testing.T) {
+	for _, tc := range []struct {
+		target, status string
+		remove         bool
+	}{
+		{"/opt/missing", "both_absent", false},
+		{"/opt/tool", "absent_in_capture", true},
+	} {
+		t.Run(tc.status, func(t *testing.T) {
+			f := testfixture.NewProvenanceCase(t)
+			if tc.remove {
+				if err := os.Remove(filepath.Join(f.Root, "host/snapshots/2/fs/opt/tool")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			c, err := casefile.Open(f.Root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := analysis.Compare(context.Background(), c, tc.target, f.ContentRoot, f.ManifestDigest, analysis.Options{MaxFileBytes: evidence.DefaultHashBytes, ReadIdentity: fixtureIdentity})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.Status != tc.status || !result.Captured.Complete() || result.Captured.VisibleState != "absent" {
+				t.Fatalf("unexpected comparison: %+v", result)
+			}
+			if problems := verify.Report(result.Captured); len(problems) != 0 {
+				t.Fatal(problems)
+			}
+		})
 	}
 }

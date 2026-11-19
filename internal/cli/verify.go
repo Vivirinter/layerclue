@@ -51,6 +51,9 @@ func (a *application) cmdVerify(args []string) int {
 
 	problems := verify.Report(&rep)
 	if len(problems) == 0 && *caseDir != "" {
+		if rep.Schema != model.SchemaReport {
+			problems = append(problems, "report schema predates explicit path states; regenerate it with this build before replay")
+		}
 		if rep.Analysis.EngineVersion != version {
 			problems = append(problems, "report engine version differs; regenerate it with this build")
 		}

@@ -24,13 +24,14 @@ import (
 func Report(rep *model.Report) []string {
 	var problems []string
 
-	if rep.Schema != model.SchemaReport {
+	if rep.Schema != model.SchemaReport && rep.Schema != model.SchemaReportV3 {
 		problems = append(problems, fmt.Sprintf("unexpected schema %q", rep.Schema))
 	}
 	if rep.Analysis == nil || rep.Analysis.EngineVersion == "" || len(rep.Analysis.EngineVersion) > 128 || rep.Analysis.MaxFileBytes <= 0 || rep.Analysis.MaxFileBytes > 8<<30 {
 		problems = append(problems, "invalid or missing analysis configuration")
 	}
 	problems = append(problems, checkImageProvenance(rep)...)
+	problems = append(problems, checkPathStates(rep)...)
 	if !model.ValidVerdict(rep.Verdict) {
 		problems = append(problems, "report has an unknown verdict")
 	}

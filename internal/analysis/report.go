@@ -69,19 +69,21 @@ func BuildReport(ctx context.Context, c *casefile.Case, target string, options O
 	allMissing = append(allMissing, out.Missing...)
 
 	rep := &model.Report{
-		Schema:      model.SchemaReport,
-		Analysis:    &model.AnalysisConfig{EngineVersion: appversion.Version, MaxFileBytes: maxBytes},
-		Path:        target,
-		ContainerID: c.ContainerID,
-		Verdict:     out.Verdict,
-		Explanation: out.Explanation,
-		Visible:     out.Visible,
-		Image:       out.Image,
-		Trace:       out.Trace,
-		Facts:       out.Facts,
-		Claims:      out.Claims,
-		Missing:     allMissing,
-		Incomplete:  out.Incomplete || len(allMissing) > 0,
+		Schema:       model.SchemaReport,
+		Analysis:     &model.AnalysisConfig{EngineVersion: appversion.Version, MaxFileBytes: maxBytes},
+		Path:         target,
+		ContainerID:  c.ContainerID,
+		Verdict:      out.Verdict,
+		Explanation:  out.Explanation,
+		Visible:      out.Visible,
+		Image:        out.Image,
+		VisibleState: out.VisibleState,
+		LowerState:   out.LowerState,
+		Trace:        out.Trace,
+		Facts:        out.Facts,
+		Claims:       out.Claims,
+		Missing:      allMissing,
+		Incomplete:   out.Incomplete || len(allMissing) > 0,
 	}
 
 	var identity *casefile.Identity

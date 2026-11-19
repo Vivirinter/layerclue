@@ -40,3 +40,20 @@ func TestReplayBudgetRequiresExplicitPermission(t *testing.T) {
 		t.Fatalf("silently replayed a different engine: %d", code)
 	}
 }
+
+func TestLegacyReportChecksumSupportedButReplayRequiresRegeneration(t *testing.T) {
+	r := sealedReport(t)
+	r.Schema = model.SchemaReportV3
+	r.VisibleState, r.LowerState = "", ""
+	if err := r.Seal(); err != nil {
+		t.Fatal(err)
+	}
+	name := filepath.Join(t.TempDir(), "v3.json")
+	writeReport(t, name, r)
+	if _, code := captureRun(t, []string{"verify", name}); code != exitOK {
+		t.Fatalf("legacy checksum verification failed: %d", code)
+	}
+	if _, code := captureRun(t, []string{"verify", name, "--case", demoCase(t)}); code != exitStrict {
+		t.Fatalf("silently replayed v3 with changed semantics: %d", code)
+	}
+}

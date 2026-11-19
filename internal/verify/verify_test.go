@@ -10,11 +10,15 @@ import (
 func sample(t *testing.T) *model.Report {
 	t.Helper()
 	rep := &model.Report{
-		Schema:      model.SchemaReport,
-		Analysis:    &model.AnalysisConfig{EngineVersion: "test", MaxFileBytes: 256 << 20},
-		Path:        "/usr/bin/helper",
-		Verdict:     model.VerdictFromImageLayer,
-		Explanation: "the object comes from image layer 1/2",
+		Schema:       model.SchemaReport,
+		Analysis:     &model.AnalysisConfig{EngineVersion: "test", MaxFileBytes: 256 << 20},
+		Path:         "/usr/bin/helper",
+		Verdict:      model.VerdictFromImageLayer,
+		VisibleState: model.PathPresent,
+		LowerState:   model.PathPresent,
+		Visible:      &model.Location{Provider: "overlay_layer", Logical: "/usr/bin/helper", Type: "file"},
+		Image:        &model.Location{Provider: "overlay_layer", Logical: "/usr/bin/helper", Type: "file"},
+		Explanation:  "the object comes from image layer 1/2",
 		Facts: []model.Fact{
 			{
 				ID:       "f1",

@@ -71,11 +71,15 @@ func TestPermuteHonoursDoubleDash(t *testing.T) {
 func sealedReport(t *testing.T) *model.Report {
 	t.Helper()
 	rep := &model.Report{
-		Schema:      model.SchemaReport,
-		Analysis:    &model.AnalysisConfig{EngineVersion: "test", MaxFileBytes: 256 << 20},
-		Path:        "/usr/bin/helper",
-		Verdict:     model.VerdictFromImageLayer,
-		Explanation: "from image layer 1/1",
+		Schema:       model.SchemaReport,
+		Analysis:     &model.AnalysisConfig{EngineVersion: "test", MaxFileBytes: 256 << 20},
+		Path:         "/usr/bin/helper",
+		Verdict:      model.VerdictFromImageLayer,
+		VisibleState: model.PathPresent,
+		LowerState:   model.PathPresent,
+		Visible:      &model.Location{Provider: "overlay_layer", Logical: "/usr/bin/helper", Type: "file"},
+		Image:        &model.Location{Provider: "overlay_layer", Logical: "/usr/bin/helper", Type: "file"},
+		Explanation:  "from image layer 1/1",
 		Facts: []model.Fact{{
 			ID:       "f1",
 			Kind:     "layer_entry",
@@ -177,13 +181,13 @@ func TestExplainEndToEnd(t *testing.T) {
 	}
 }
 
-func TestExplainStrictExitsOnUnknown(t *testing.T) {
+func TestExplainStrictAcceptsEstablishedAbsence(t *testing.T) {
 	dir := demoCase(t)
 	_, code := captureRun(t,
 		[]string{"explain", "/nope", "--case", dir, "--strict"},
 	)
-	if code != exitStrict {
-		t.Fatalf("exit = %d, want %d", code, exitStrict)
+	if code != exitOK {
+		t.Fatalf("exit = %d, want %d", code, exitOK)
 	}
 }
 

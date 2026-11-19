@@ -50,8 +50,8 @@ func Terminal(w io.Writer, rep *model.Report, showTrace bool) error {
 	}
 
 	fmt.Fprintf(&b, "  %-10s %s\n", "verdict", Safe(string(rep.Verdict)))
-	fmt.Fprintf(&b, "  %-10s %s\n", "visible", describeOr(rep.Visible, "nothing"))
-	fmt.Fprintf(&b, "  %-10s %s\n", "lower view", describeOr(rep.Image, "no entry"))
+	fmt.Fprintf(&b, "  %-10s %s\n", "visible", describeView(rep.Visible, rep.VisibleState))
+	fmt.Fprintf(&b, "  %-10s %s\n", "lower view", describeView(rep.Image, rep.LowerState))
 	fmt.Fprintf(&b, "  %-10s %s\n", "strength", strengthOf(rep))
 	if proof := rep.ImageProvenance; proof != nil {
 		fmt.Fprintf(&b, "  %-10s %s\n", "image link", Safe(proof.Status))
@@ -124,6 +124,22 @@ func describeOr(l *model.Location, fallback string) string {
 		b.WriteString("  metacopy")
 	}
 	return b.String()
+}
+
+func describeView(l *model.Location, state model.PathState) string {
+	switch state {
+	case model.PathAbsent:
+		return "absent in captured view (prior existence unknown)"
+	case model.PathWhiteout:
+		return "blocked by a captured whiteout (prior existence unknown)"
+	case model.PathOpaque:
+		return "hidden by a captured opaque directory"
+	case model.PathUnknown:
+		return "unknown (insufficient evidence)"
+	default:
+		// A nil v3 location never proves absence.
+		return describeOr(l, "unknown (state not recorded)")
+	}
 }
 
 func strengthOf(rep *model.Report) model.Strength {

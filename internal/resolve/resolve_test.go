@@ -255,8 +255,8 @@ func TestMountWithoutTheFile(t *testing.T) {
 	f := newFixture(t)
 	out := f.explain(t, "/usr/bin/absent")
 
-	if out.Verdict != model.VerdictUnknownInsufficient {
-		t.Fatalf("verdict = %s, want unknown_insufficient_evidence", out.Verdict)
+	if out.Verdict != model.VerdictAbsent || out.VisibleState != model.PathAbsent || out.Incomplete || len(out.Missing) != 0 {
+		t.Fatalf("complete mount absence was not established: %+v", out)
 	}
 }
 
