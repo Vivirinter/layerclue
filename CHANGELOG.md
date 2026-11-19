@@ -1,5 +1,20 @@
 # Changes
 
+## Unreleased
+
+- Report v4 separates visible/lower presence, established absence,
+  whiteout/opaque blocking and unavailable evidence. Complete mount absence
+  requires an existing captured root and explicit completeness assertion.
+- Strict explanations accept established absence; OCI comparisons distinguish
+  ordinary absence from inconclusive results. Human output never uses a missing
+  location alone as proof of absence.
+- Captured inode metadata and journal-recorded source mode/UID/GID/mtime are
+  shown separately, with bounded parsing, object/control bindings and explicit
+  source-trust limits. No original permissions are restored.
+- V3 report structure/checksum verification remains supported; replay requires
+  regenerating reports with the current schema. Added journal/parser,
+  contradiction, integrity and evidence-preservation regressions.
+
 ## 0.1.0
 
 First release of the offline container file-provenance CLI, without

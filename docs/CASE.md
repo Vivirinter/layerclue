@@ -193,10 +193,26 @@ a comparison by rerunning it; `verify` accepts explain reports, not comparisons.
 
 `verify REPORT` checks report structure/checksum only. `verify REPORT --case CASE`
 adds fresh analysis and canonical-report comparison; it uses the same engine,
-not an independent implementation. layerclue.report/v3 records engine version
-and hash budget. Replay requires the same engine; a higher untrusted report
+not an independent implementation. layerclue.report/v4 records engine version,
+hash budget and explicit visible_state/lower_state values. Replay requires the
+same schema and engine; a higher untrusted report
 budget needs an explicit verifier-side --max-file-bytes increase. Only changes
 affecting that selected-path analysis are covered.
+
+The unreleased analyser emits v4; released 0.1.0 binaries emit v3. Structure and
+checksum verification of v3 remains supported without inferring missing states.
+Replay of v3 with the changed analyser requires regenerating the report.
+
+View states are `present`, `absent`, `deleted_by_whiteout`,
+`hidden_by_opaque_parent` and `unknown`. Ordinary absence is an explicit negative
+observation. Absence from a mount requires its captured root to exist and the
+case's explicit `complete: true` assertion. Missing roots, partial captures and
+missing layers remain unknown. A non-directory ancestor or dangling logical
+symlink can establish that the requested resolved path is absent. Neither a
+whiteout nor an absent path proves previous existence, actor or deletion time.
+`explain --strict` accepts established absence; `compare` distinguishes
+`both_absent`, `absent_in_capture`, `absent_in_image` and `inconclusive`, with exit
+1 for all of them. It returns 0 only for matching regular-file bytes.
 
 ## Inventories and working copies
 
@@ -232,6 +248,29 @@ are 0600/directories 0700; original ownership/timestamps are journaled rather
 than restored. Only needed user OverlayFS attrs are restored; execution bits,
 devices/capabilities are never recreated. Reanalyse the transformed copy to make
 its own report. Preserve acquisition originals and journals separately.
+
+In v4, `captured_metadata` contains the selected working-copy mode, numeric
+UID/GID and nanosecond mtime. `original_metadata` is a separate acquisition
+record, read from bounded v1 collection or v2 Docker journals. File records must
+match type, size and SHA-256; directory records must match type and the sorted
+immediate child-name digest of the physical provider directory (not a merged
+namespace listing or descendant contents). `mode_bits` is Go FileMode, not raw
+Linux st_mode or a chmod argument; the matching `mode` string preserves set-ID
+flags for display. Collection inventories
+are checksum-checked and bound to current case control artifacts; Docker plans
+are checksum-checked and matched to the selected container ID. Duplicate output
+addresses, escaping paths and unknown mode bits are refused. No journal source
+address is opened, and no recorded permissions, ownership or times are restored.
+
+The report binds the exact journal checksum and source-metadata fact. This is
+an observed record, not independent authentication of its author or original
+source. Verify the case inventory with an external trusted key separately.
+No journal/matching record means source metadata is unavailable. An unreadable,
+malformed or mismatching journal marks analysis incomplete and fails strict
+mode; it cannot supply partially accepted original metadata. Symlinks used as
+physical journal addresses are never followed. Source nanosecond times are
+decimal strings in arbitrary fact values to preserve common JSON round-trips;
+the typed metadata field remains an exact integer.
 
 For a local self-check, verify the new bundle, confirm a repeated collect refuses
 that destination with exit 3, then alter only the disposable copied helper and

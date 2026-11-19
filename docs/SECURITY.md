@@ -84,6 +84,22 @@ checksums provide consistency only. See [release verification](DEVELOPMENT.md#re
 
 ## Resource budgets
 
+The v4 view-state and journal checks do not authenticate source acquisition.
+An asserted complete mount proves absence only within the operator-declared
+capture scope; its physical root must exist. Source metadata is displayed as a
+separate journal assertion, bound to selected file bytes or immediate directory
+child names and to the exact journal checksum. A directory-name binding is not
+whole-tree equivalence. V1 collection control artifacts and v2 Docker container
+identity/plan consistency are also checked. Signatures inside a journal are not
+implicitly trusted; use `verify-case` with an independently obtained key.
+Malformed journals make strict analysis fail without applying any metadata.
+
+Journal reads are limited to 16 MiB/1,000,000 JSON values and 50,000 collection
+or 40,000 Docker records. Directory bindings read at most 50,000 child names;
+collection control-file binding uses the existing per-artifact limits. Work is
+context-cancellable between responsive reads. Duplicate records and unknown
+mode bits fail closed. Source paths are record data, never addresses to follow.
+
 Limits constrain work; counts can fail earlier because byte/value limits also
 apply. Hashing/copy cancellation is cooperative between responsive I/O reads.
 

@@ -10,6 +10,8 @@ saved container filesystems without starting the captured workload.
 
 Current version: **0.1.0**, the first release for evaluation.
 There is no stable-support, independent-audit or complete-forensics claim.
+The unreleased working tree emits report schema `v4`; published `0.1.0`
+binaries emit `v3`. See [unreleased changes](CHANGELOG.md#unreleased).
 
 ## Supported systems
 
@@ -68,6 +70,9 @@ Exit codes: **0** completed, **1** strict/integrity/comparison failure,
 **4** explicitly unsupported semantics. A non-strict exit 0 can still contain an
 incomplete verdict; inspect the result. `--strict` fails on missing evidence,
 unsupported semantics and unverified premises.
+A complete captured view can establish absence: `explain --strict` then returns
+0 with `absent_in_capture`. This does not prove prior existence or deletion.
+`compare` still returns 1 for any result other than `matching_bytes`.
 
 ## Interpretation and safety
 
@@ -77,6 +82,10 @@ unsupported semantics and unverified premises.
 - Report verification checks structure/checksum; `--case` adds fresh analysis.
   Signed inventories authenticate a recorded baseline with an external trusted
   key. Neither proves that original acquisition was truthful or complete.
+- Reports distinguish present, absent, whiteout/opaque-blocked and unknown views.
+  Captured permissions/owners/mtime describe the working copy. Recorded source
+  metadata is shown separately only when a journal record binds to the selected
+  file bytes or directory child names; it is not authenticated source history.
 - LayerClue cannot determine who changed a file, when, whether it is malicious
   or which older inode a process executed. Importing an offline snapshot does
   not create an atomic live snapshot.
