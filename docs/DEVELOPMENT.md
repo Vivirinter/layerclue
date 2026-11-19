@@ -79,7 +79,7 @@ requirements include interpreter-dependent transitive dependencies; installs
 must retain --require-hashes and --only-binary=:all:.
 Python and Bash are not required by the installed CLI.
 
-CI runs workflow-audit, quality, security and seven bounded ten-second fuzz
+CI runs workflow-audit, quality, security and eight bounded ten-second fuzz
 campaigns independently, then package. ci-success fails for any failed/cancelled/
 skipped required job or requested lab. The workflow covers push, pull_request and
 merge_group. New PR runs cancel earlier runs of that PR.

@@ -123,6 +123,7 @@ jobs:
       - run: go test ./internal/oci -run '^$' -fuzz '^FuzzTarChanges$' -fuzztime 10s -parallel 2
       - run: go test ./internal/docker -run '^$' -fuzz '^FuzzInspect$' -fuzztime 10s -parallel 2
       - run: go test ./internal/acquire -run '^$' -fuzz '^FuzzDecodePlan$' -fuzztime 10s -parallel 2
+      - run: go test ./internal/acquire -run '^$' -fuzz '^FuzzDecodeJournalMetadata$' -fuzztime 10s -parallel 2
       - run: go test ./internal/distribution -run '^$' -fuzz '^FuzzValidReleaseVersion$' -fuzztime 10s -parallel 2
 
   package:
