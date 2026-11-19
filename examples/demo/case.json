@@ -1,0 +1,8 @@
+{
+  "schema": "layerclue.case/v1",
+  "host_root": "host",
+  "mountinfo": "mountinfo",
+  "mounts": [
+    {"mount_id": 101, "artifact": "captures/bin", "complete": true}
+  ]
+}

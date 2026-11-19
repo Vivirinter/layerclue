@@ -1,0 +1,2 @@
+100 1 0:52 / / rw - overlay overlay rw,lowerdir=/layers/lower,upperdir=/layers/upper,workdir=/layers/work,userxattr
+101 100 8:1 /volume/bin /usr/bin rw - ext4 /dev/synthetic rw
